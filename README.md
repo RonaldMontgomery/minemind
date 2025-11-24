@@ -1,6 +1,6 @@
 # minemind
 
-**A custom Python package that launches an interactive Read-Eval-Print Loop (REPL) environment, likely designed for a logic puzzle solver (e.g., Minesweeper).**
+**A custom Python package that launches an interactive Read-Eval-Print Loop (REPL) environment.**
 
 ## Overview
 
