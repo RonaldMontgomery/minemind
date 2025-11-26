@@ -1,3 +1,4 @@
+README.md
 pyproject.toml
 minemind/__main__.py
 minemind/cli.py
@@ -18,6 +19,7 @@ minemind/core/signatures.py
 minemind/core/snapshot.py
 minemind/core/solver.py
 minemind/tests/test_board.py
+minemind/tests/test_board_init.py
 minemind/tests/test_frontier.py
 minemind/tests/test_generator.py
 minemind/tests/test_rules.py
