@@ -4,7 +4,7 @@ import math
 from dataclasses import dataclass
 from typing import List, Optional, Union, Tuple
 import random 
-
+from collections import deque
 
 @dataclass
 class Cell:
@@ -166,6 +166,91 @@ class Board:
                             mine_count += 1
                             
                     cell.neighbor_mines = mine_count
+
+
+    # --- Game Flow / Public Methods ---
+
+def reveal(self, r: int, c: int) -> None:
+    """Handles the user clicking a cell to reveal it."""
+    
+    # 1. Input/State Validation
+    if not (0 <= r < self.rows and 0 <= c < self.cols and self.state == "PLAYING"):
+        return
+
+    cell = self.cells[r][c]
+    if cell.is_revealed or cell.is_flagged:
+        return
+        
+    # 2. Deferred Setup (FIRST CLICK LOGIC)
+    if not self.mines_placed:
+        self._place_mines(r, c)
+        self._calculate_neighbor_counts()
+        # NOTE: self.mines_placed is set to True inside _place_mines
+        
+    # 3. Mine Check (LOSE CONDITION)
+    if cell.is_mine:
+        cell.is_revealed = True
+        self.state = "LOST"
+        print("💥 GAME OVER: You hit a mine!")
+        return
+        
+    # 4. Reveal & Flood-Fill
+    cell.is_revealed = True
+    
+    if cell.neighbor_mines == 0:
+        self._flood_reveal(r, c) # Needs to be implemented below
+        
+    # 5. Check Win Condition
+    self._check_win_condition() # Needs to be implemented below
+
+def _flood_reveal(self, start_r: int, start_c: int) -> None:
+    """
+    Performs a Breadth-First Search (BFS) to cascade reveals from a zero cell.
+    """
+    queue = deque([(start_r, start_c)])
+    
+    while queue:
+        r, c = queue.popleft()
+        
+        # Iterate over neighbors
+        for nr, nc in self._get_neighbors_coords(r, c):
+            neighbor_cell = self.cells[nr][nc]
+            
+            # Skip if already revealed or flagged
+            if neighbor_cell.is_revealed or neighbor_cell.is_flagged:
+                continue
+                
+            neighbor_cell.is_revealed = True
+            
+            # ONLY continue the flood (add to queue) if the neighbor is also a zero
+            if neighbor_cell.neighbor_mines == 0:
+                queue.append((nr, nc))
+                
+            # If neighbor_cell.neighbor_mines > 0, we stop the flood at that cell.
+
+def _check_win_condition(self) -> None:
+    """Checks if all non-mine cells have been revealed."""
+    hidden_cells = 0
+    
+    for r in range(self.rows):
+        for c in range(self.cols):
+            cell = self.cells[r][c]
+            
+            # We count hidden cells that are NOT mines
+            if not cell.is_revealed and not cell.is_mine:
+                hidden_cells += 1
+                
+    if hidden_cells == 0:
+        self.state = "WON"
+        print("CONGRATULATIONS: You won the game!")
+
+
+def flag(self, r: int, c: int) -> None:
+    """Toggles the flag state of an unrevealed cell."""
+    if self.state == "PLAYING":
+        cell = self.cells[r][c]
+        if not cell.is_revealed:
+            cell.is_flagged = not cell.is_flagged                
 
 
 # --- Example Main for Local Testing ---
