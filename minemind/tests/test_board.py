@@ -342,20 +342,22 @@ class TestNeighborCounts(unittest.TestCase):
 
         Mines at (0,0) and (2,1).
         """
-        b = Board(rows=3, cols=3, mines=0, difficulty="whatever")
+        # Ensure we don't accidentally run the random mine placement from __init__
+        b = Board(rows=3, cols=3, mines=0, difficulty="whatever") 
 
-        # Reset cells
+        # Reset cells (Good practice for deterministic tests)
         for r in range(b.rows):
             for c in range(b.cols):
                 b.cells[r][c] = Cell()
 
+        # Place deterministic mines
         b.cells[0][0].is_mine = True
         b.cells[2][1].is_mine = True
 
         b._calculate_neighbor_counts()
 
         self.assertEqual(b.cells[0][1].neighbor_mines, 1)  # near (0,0)
-        self.assertEqual(b.cells[1][0].neighbor_mines, 1)  # near (0,0)
+        self.assertEqual(b.cells[1][0].neighbor_mines, 2)  # FIX: near (0,0) and (2,1)
         self.assertEqual(b.cells[1][1].neighbor_mines, 2)  # adjacent to both mines
         self.assertEqual(b.cells[1][2].neighbor_mines, 1)  # near (2,1)
         self.assertEqual(b.cells[2][2].neighbor_mines, 1)  # near (2,1)
