@@ -60,7 +60,7 @@ Welcome to the minemind shell. Type help or ? to list commands.
 From the project root:
 
 ```bash
-python -m unittest discover -s tests
+python -m unittest discover -s minemind\tests -p "test_*.py"
 ```
 
 -----
