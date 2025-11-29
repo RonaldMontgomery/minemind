@@ -56,7 +56,7 @@ class MinemindSolver:
             mA, mB = remaining mines around each
 
           1. If Hidden(A) ⊂ Hidden(B) and mA == mB:
-               Hidden(B) \ Hidden(A) must be safe → REVEAL.
+               Hidden(B) \\ Hidden(A) must be safe → REVEAL.
 
           2. If Hidden(A) ⊂ Hidden(B) and mB - mA == |Hidden(B) \ Hidden(A)| > 0:
                All cells in Hidden(B) \ Hidden(A) are mines → FLAG.
