@@ -5,6 +5,7 @@ from contextlib import redirect_stdout
 
 from minemind.core.board import Board, Cell
 from minemind.render import display_board
+from minemind.core.solver import MinemindSolver
 
 
 class TestCellRepr(unittest.TestCase):
@@ -829,6 +830,137 @@ class TestRenderDisplay(unittest.TestCase):
         tokens = self._get_row_tokens(b, 0)
         # Expect: X (wrong flag), F (correctly-flagged mine), M (unflagged mine)
         self.assertEqual(tokens, ["X", "F", "M"])
+
+class TestSolverTrivialRules(unittest.TestCase):
+    """Tests for the solver's basic flag/reveal logic."""
+
+    def setUp(self):
+        self.solver = MinemindSolver()
+
+    # T1: Basic Flag Rule (Mines Found)
+    def test_basic_flag_rule_single_unknown_neighbor(self):
+        """
+        3x3 board.
+        Mine at (0,0). Cell (1,1) is revealed with count=1, and all of its
+        other neighbors are already revealed. The only hidden neighbor is (0,0),
+        so the solver should FLAG (0,0).
+        """
+        b = Board(rows=3, cols=3, mines=0, difficulty="whatever")
+
+        # Reset cells to a clean state
+        for r in range(b.rows):
+            for c in range(b.cols):
+                b.cells[r][c] = Cell()
+
+        # Place a single mine at (0,0)
+        b.cells[0][0].is_mine = True
+        b._calculate_neighbor_counts()
+
+        # Reveal (1,1) and all its neighbors except (0,0)
+        center_neighbors = b._get_neighbors_coords(1, 1)
+        for nr, nc in center_neighbors:
+            if (nr, nc) != (0, 0):
+                b.cells[nr][nc].is_revealed = True
+
+        b.cells[1][1].is_revealed = True  # the numbered cell
+
+        moves = self.solver.solve_step(b)
+        self.assertIn((0, 0, "FLAG"), moves)
+        # No other flags should be suggested
+        flag_moves = [m for m in moves if m[2] == "FLAG"]
+        self.assertEqual(flag_moves, [(0, 0, "FLAG")])
+
+    # T2: Basic Reveal Rule (Safes Found)
+    def test_basic_reveal_rule_all_mines_flagged(self):
+        """
+        3x3 board.
+        Mine at (0,0), which is flagged.
+        Cell (1,1) is revealed with count=1. All other neighbors of (1,1)
+        are hidden and unflagged. Solver should REVEAL those 7 neighbors.
+        """
+        b = Board(rows=3, cols=3, mines=0, difficulty="whatever")
+
+        # Reset cells
+        for r in range(b.rows):
+            for c in range(b.cols):
+                b.cells[r][c] = Cell()
+
+        # Place a mine at (0,0) and flag it
+        b.cells[0][0].is_mine = True
+        b.cells[0][0].is_flagged = True
+        b._calculate_neighbor_counts()
+
+        # Reveal center (1,1) which should have neighbor_mines = 1
+        b.cells[1][1].is_revealed = True
+
+        moves = self.solver.solve_step(b)
+
+        # Expected reveals: all neighbors of (1,1) except the flagged (0,0)
+        neighbors = set(b._get_neighbors_coords(1, 1))
+        expected_reveals = sorted(
+            (nr, nc, "REVEAL")
+            for (nr, nc) in neighbors
+            if (nr, nc) != (0, 0)
+        )
+        reveal_moves = sorted(m for m in moves if m[2] == "REVEAL")
+
+        self.assertEqual(reveal_moves, expected_reveals)
+
+    # T3: No Certainty
+    def test_no_certainty_returns_empty_move_list(self):
+        """
+        3x3 board, two mines at (0,0) and (2,2).
+        Reveal (1,0) (count 1). There should not be a deterministically
+        safe or mine cell, so the solver returns an empty move list.
+        """
+        b = Board(rows=3, cols=3, mines=0, difficulty="whatever")
+
+        # Reset cells
+        for r in range(b.rows):
+            for c in range(b.cols):
+                b.cells[r][c] = Cell()
+
+        # Place mines
+        b.cells[0][0].is_mine = True
+        b.cells[2][2].is_mine = True
+        b._calculate_neighbor_counts()
+
+        # Reveal (1,0)
+        b.cells[1][0].is_revealed = True
+
+        moves = self.solver.solve_step(b)
+        self.assertEqual(moves, [])
+
+    # T4: Out-of-Bounds/Filtering – ignores flagged neighbors as candidates
+    def test_flagged_neighbors_not_considered_for_moves(self):
+        """
+        3x3 board.
+        Mine at (0,0). (0,1) is flagged (but we only care that it's flagged).
+        Reveal (1,1) (count 1). The solver must ignore flagged cells as targets;
+        it must not generate any move for (0,1).
+        """
+        b = Board(rows=3, cols=3, mines=0, difficulty="whatever")
+
+        # Reset cells
+        for r in range(b.rows):
+            for c in range(b.cols):
+                b.cells[r][c] = Cell()
+
+        # Mine at (0,0)
+        b.cells[0][0].is_mine = True
+        # Flag at (0,1) (could be right or wrong; we only test filtering)
+        b.cells[0][1].is_flagged = True
+        b._calculate_neighbor_counts()
+
+        # Reveal (1,1)
+        b.cells[1][1].is_revealed = True
+
+        moves = self.solver.solve_step(b)
+
+        # Ensure no move ever targets the flagged cell (0,1)
+        for r, c, action in moves:
+            self.assertNotEqual((r, c), (0, 1))
+
 
 if __name__ == "__main__":
     unittest.main()
