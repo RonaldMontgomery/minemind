@@ -3,15 +3,15 @@
 from typing import List, Tuple, Dict, Set
 from minemind.core.board import Board  # Used for type hinting and access
 
-# Define a move type for clear communication between solver and CLI
-SolverMove = Tuple[int, int, str]  # (row, col, 'REVEAL' or 'FLAG')
+# (row, col, 'REVEAL' or 'FLAG')
+SolverMove = Tuple[int, int, str]
 
 
 class MinemindSolver:
     """Implements logical algorithms to solve a Minesweeper board."""
 
     def __init__(self) -> None:
-        # Placeholder for later caching / parameters
+        # Reserved for future options / caching
         pass
 
     # ------------------------------------------------------------------
@@ -30,12 +30,13 @@ class MinemindSolver:
 
                 # Only revealed, numbered cells are interesting
                 if cell.is_revealed and cell.neighbor_mines > 0:
-                    # Check if any neighbor is hidden & not flagged
+                    # Check if any neighbor is hidden (unrevealed AND not flagged)
                     for nr, nc in board._get_neighbors_coords(r, c):
                         neighbor = board.cells[nr][nc]
                         if not neighbor.is_revealed and not neighbor.is_flagged:
                             frontier_coords.append((r, c))
-                            break  # one hidden neighbor is enough to mark as frontier
+                            # One hidden neighbor is enough to make it a frontier cell
+                            break
 
         return frontier_coords
 
@@ -48,17 +49,17 @@ class MinemindSolver:
         certain_moves: List[SolverMove],
         seen_moves: Set[SolverMove],
     ) -> None:
-        """
+        r"""
         Applies subset-based deductions:
 
           Let A and B be two frontier cells with:
             Hidden(A), Hidden(B) = sets of hidden neighbors
-            mA, mB = remaining mines around each
+            mA, mB               = remaining mines around each
 
           1. If Hidden(A) ⊂ Hidden(B) and mA == mB:
-               Hidden(B) \\ Hidden(A) must be safe → REVEAL.
+               Hidden(B) \ Hidden(A) must be safe → REVEAL.
 
-          2. If Hidden(A) ⊂ Hidden(B) and mB - mA == |Hidden(B) \ Hidden(A)| > 0:
+          2. If Hidden(A) ⊂ Hidden(B) and mB - mA == |Hidden(B) \\ Hidden(A)| > 0:
                All cells in Hidden(B) \ Hidden(A) are mines → FLAG.
         """
         n = len(frontier_data)
@@ -81,7 +82,7 @@ class MinemindSolver:
                 if not hiddenB:
                     continue
 
-                # We only care about proper subsets
+                # We only care about proper subsets: Hidden(A) ⊂ Hidden(B)
                 if not hiddenA < hiddenB:
                     continue
 
@@ -118,9 +119,11 @@ class MinemindSolver:
           - Trivial Flag Rule:
               If neighbor_mines - flagged_neighbors == hidden_unflagged_neighbors > 0,
               then all hidden neighbors must be mines → FLAG them.
+
           - Trivial Reveal Rule:
               If flagged_neighbors == neighbor_mines,
               then all remaining hidden neighbors are safe → REVEAL them.
+
           - Subset Rule (via _apply_subset_logic).
         """
         certain_moves: List[SolverMove] = []
@@ -136,7 +139,7 @@ class MinemindSolver:
             hidden_coords: Set[Tuple[int, int]] = set()
             flagged_count = 0
 
-            # Collect neighbors
+            # Collect neighborhood state
             for nr, nc in board._get_neighbors_coords(r, c):
                 neighbor = board.cells[nr][nc]
                 if neighbor.is_flagged:
