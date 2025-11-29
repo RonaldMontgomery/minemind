@@ -1,7 +1,9 @@
 # minemind/cli.py
 
 import cmd
-from minemind.core.board import Board # Import your Board logic
+from minemind.core.board import Board
+from minemind.render import display_board
+
 
 class MinemindShell(cmd.Cmd):
     """
