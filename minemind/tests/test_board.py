@@ -1,7 +1,10 @@
 import math
 import unittest
+import io
+from contextlib import redirect_stdout
 
 from minemind.core.board import Board, Cell
+from minemind.render import display_board
 
 
 class TestCellRepr(unittest.TestCase):
@@ -762,6 +765,70 @@ class TestNeighborCounts(unittest.TestCase):
         self.assertEqual(b.cells[1][0].neighbor_mines, 1)
         self.assertEqual(b.cells[1][1].neighbor_mines, 1)
 
+class TestRenderDisplay(unittest.TestCase):
+    """Tests for the render/display_board behavior, including wrong flags."""
+
+    def _get_row_tokens(self, board, row_index: int) -> list[str]:
+        """
+        Helper: run display_board(board), capture stdout,
+        and return the rendered symbols for a given row as a list.
+        """
+        buf = io.StringIO()
+        with redirect_stdout(buf):
+            display_board(board)
+        output = buf.getvalue().splitlines()
+
+        # Header: line 0 = col header, line 1 = separator
+        # Row r is at index 2 + r
+        row_line = output[2 + row_index]
+        # Format: "0 | X  F  M" → split on '|' then on whitespace
+        _, cells_part = row_line.split("|", 1)
+        tokens = cells_part.strip().split()
+        return tokens
+
+    def test_flagged_non_mine_during_play_shows_F(self):
+        """
+        While the game is PLAYING, a flagged non-mine cell should render as 'F'.
+        """
+        b = Board(rows=1, cols=1, mines=0)
+        cell = b.cells[0][0]
+        cell.is_mine = False
+        cell.is_flagged = True
+        b.state = "PLAYING"
+
+        tokens = self._get_row_tokens(b, 0)
+        self.assertEqual(tokens, ["F"])
+
+    def test_wrong_flag_after_loss_shows_X(self):
+        """
+        After the game is over (LOST), a flagged non-mine cell should render as 'X'
+        while mines are revealed as 'M' and correctly flagged mines stay 'F'.
+        Layout (one row, three columns):
+
+          [0] flagged non-mine -> 'X'
+          [1] flagged mine     -> 'F'
+          [2] unflagged mine   -> 'M'
+        """
+        b = Board(rows=1, cols=3, mines=0)
+
+        # Cell 0: wrong flag (flagged, not a mine)
+        b.cells[0][0].is_mine = False
+        b.cells[0][0].is_flagged = True
+
+        # Cell 1: correctly flagged mine
+        b.cells[0][1].is_mine = True
+        b.cells[0][1].is_flagged = True
+
+        # Cell 2: unflagged mine
+        b.cells[0][2].is_mine = True
+        b.cells[0][2].is_flagged = False
+
+        # Simulate game over
+        b.state = "LOST"
+
+        tokens = self._get_row_tokens(b, 0)
+        # Expect: X (wrong flag), F (correctly-flagged mine), M (unflagged mine)
+        self.assertEqual(tokens, ["X", "F", "M"])
 
 if __name__ == "__main__":
     unittest.main()
