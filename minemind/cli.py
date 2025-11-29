@@ -2,7 +2,9 @@
 
 import cmd
 from minemind.core.board import Board
+from minemind.core.solver import MinemindSolver
 from .render import display_board
+from typing import List, Tuple, Any
 
 
 class MinemindShell(cmd.Cmd):
@@ -19,6 +21,10 @@ class MinemindShell(cmd.Cmd):
         # Create a default beginner board immediately upon starting the shell
         print("Starting new Beginner game...")
         self.board = Board(difficulty="beginner")
+
+        # Initialize the solver instance
+        self.solver = MinemindSolver()
+
         # Show the fresh board
         display_board(self.board)
 
@@ -29,13 +35,10 @@ class MinemindShell(cmd.Cmd):
         args = arg.split()
         
         if not args:
-            # Default to beginner if no arguments are given
             self.board = Board(difficulty="beginner")
         elif len(args) == 1:
-            # New game by difficulty string (e.g., 'new intermediate')
             self.board = Board(difficulty=args[0])
         elif len(args) == 3:
-            # New game by custom size (e.g., 'new 10 10 15')
             try:
                 rows = int(args[0])
                 cols = int(args[1])
@@ -66,7 +69,7 @@ class MinemindShell(cmd.Cmd):
             print("Error: Coordinates must be integers.")
             return
 
-        # Check bounds before calling the board
+        # Bounds check
         if not (0 <= r < self.board.rows and 0 <= c < self.board.cols):
             print(
                 f"Error: Coordinates ({r}, {c}) are outside the board "
@@ -85,9 +88,8 @@ class MinemindShell(cmd.Cmd):
         # Check for game end state (output is handled inside board.py for now)
         if self.board.state != "PLAYING":
             print(f"Game over! Final state: {self.board.state}")
-            # Board will be rendered with all mines visible, wrong flags as 'X', etc.
-
-        # Always show the current board after a reveal
+            # The renderer will show the final state (all mines)
+            
         display_board(self.board)
 
     def do_flag(self, arg):
@@ -105,7 +107,7 @@ class MinemindShell(cmd.Cmd):
             print("Error: Coordinates must be integers.")
             return
 
-        # Check bounds
+        # Bounds check
         if not (0 <= r < self.board.rows and 0 <= c < self.board.cols):
             print(f"Error: Coordinates ({r}, {c}) are outside the board boundaries.")
             return
@@ -124,12 +126,51 @@ class MinemindShell(cmd.Cmd):
     # ------------------ Utility Commands ------------------
     
     def do_solve(self, arg):
-        'Start the solver for the current board.'
-        # This will eventually call the logic in core/solver.py
-        print("Solver activated.")
+        'Ask the solver to find and apply all certain moves for the current board.'
+        
+        if self.board.state != "PLAYING":
+            print(f"Cannot solve. Game is already {self.board.state}.")
+            display_board(self.board)
+            return
+
+        print("--- Running Solver Step ---")
+        
+        # 1. Get certain moves from the solver
+        moves: List[Tuple[int, int, str]] = self.solver.solve_step(self.board)
+
+        if not moves:
+            print("Solver found no logically certain moves. Time for manual play or quit.")
+            display_board(self.board)
+            return
+
+        print(f"Solver: applying {len(moves)} certain move(s)...")
+        
+        # 2. Execute moves sequentially
+        for r, c, action in moves:
+            # Check game state before each move
+            if self.board.state != "PLAYING":
+                break 
+                
+            if action == "FLAG":
+                print(f"  -> FLAG at ({r}, {c})")
+                self.board.flag(r, c)
+            elif action == "REVEAL":
+                print(f"  -> REVEAL at ({r}, {c})")
+                # Revealing a cell uses the same logic as the user's manual reveal
+                self.board.reveal(r, c)
+            else:
+                print(f"  [WARN] Unknown solver action '{action}' at ({r}, {c})")
+
+        # 3. Render the result
+        display_board(self.board)
+        
+        if self.board.state != "PLAYING":
+            print(f"Game over! Final state: {self.board.state}")
+
 
     def do_exit(self, arg):
         'Exit the shell: exit or quit'
+        print("Exiting minemind. Goodbye!")
         return True
 
     def do_quit(self, arg):
