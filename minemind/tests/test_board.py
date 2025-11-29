@@ -961,6 +961,294 @@ class TestSolverTrivialRules(unittest.TestCase):
         for r, c, action in moves:
             self.assertNotEqual((r, c), (0, 1))
 
+# minemind/tests/test_solver.py
+
+import unittest
+
+from minemind.core.board import Board, Cell
+from minemind.core.solver import MinemindSolver
+
+
+class TestSolverTrivialAndSubsetRules(unittest.TestCase):
+    """Tests for solver trivial rules and subset-based deductions."""
+
+    def setUp(self):
+        self.solver = MinemindSolver()
+
+    # ---------------- T1–T4: Trivial Rules ----------------
+
+    def test_flag_rule_success_two_mines(self):
+        """
+        T1: Flag Rule Success (Trivial 1)
+        3x3 board.
+        Mines at (0,0) and (0,1). Reveal (1,1), which shows count=2.
+        All other neighbors of (1,1) are already revealed (safe),
+        so the only hidden neighbors are (0,0) and (0,1).
+
+        The solver should flag (0,0) and (0,1).
+        """
+        b = Board(rows=3, cols=3, mines=0, difficulty="whatever")
+
+        # Reset cells to clean state
+        for r in range(b.rows):
+            for c in range(b.cols):
+                b.cells[r][c] = Cell()
+
+        # Place two mines at (0,0) and (0,1)
+        b.cells[0][0].is_mine = True
+        b.cells[0][1].is_mine = True
+        b._calculate_neighbor_counts()
+
+        # Reveal all neighbors of (1,1) EXCEPT the two mine cells
+        neighbors = b._get_neighbors_coords(1, 1)
+        for nr, nc in neighbors:
+            if (nr, nc) not in [(0, 0), (0, 1)]:
+                b.cells[nr][nc].is_revealed = True
+
+        # Reveal the numbered cell itself
+        b.cells[1][1].is_revealed = True
+        self.assertEqual(b.cells[1][1].neighbor_mines, 2)
+
+        moves = self.solver.solve_step(b)
+
+        flag_moves = sorted(m for m in moves if m[2] == "FLAG")
+        expected_flags = sorted([(0, 0, "FLAG"), (0, 1, "FLAG")])
+        self.assertEqual(flag_moves, expected_flags)
+
+    def test_reveal_rule_success_all_safes(self):
+        """
+        T2: Reveal Rule Success (Trivial 2)
+        3x3 board.
+        Single mine at (0,0). Reveal (1,1) (count=1). Flag (0,0) manually.
+
+        Solver should reveal all remaining 7 hidden neighbors of (1,1).
+        """
+        b = Board(rows=3, cols=3, mines=0, difficulty="whatever")
+
+        # Reset to clean cells
+        for r in range(b.rows):
+            for c in range(b.cols):
+                b.cells[r][c] = Cell()
+
+        # One mine at (0,0), flag it
+        b.cells[0][0].is_mine = True
+        b.cells[0][0].is_flagged = True
+        b._calculate_neighbor_counts()
+
+        # Reveal center (1,1), which should be '1'
+        b.cells[1][1].is_revealed = True
+        self.assertEqual(b.cells[1][1].neighbor_mines, 1)
+
+        moves = self.solver.solve_step(b)
+
+        # All neighbors of (1,1) except (0,0) (the flagged mine) should be REVEAL
+        neighbors = set(b._get_neighbors_coords(1, 1))
+        expected_reveals = sorted(
+            (nr, nc, "REVEAL") for (nr, nc) in neighbors if (nr, nc) != (0, 0)
+        )
+
+        reveal_moves = sorted(m for m in moves if m[2] == "REVEAL")
+        self.assertEqual(reveal_moves, expected_reveals)
+
+    def test_no_certainty_returns_empty_list(self):
+        """
+        T3: No Certainty (Failure Case)
+        3x3 board.
+        Reveal (1,1) (count=1). No flags. All 8 neighbors of (1,1) are hidden.
+
+        The solver cannot deduce a certain mine or safe cell, so it returns [].
+        """
+        b = Board(rows=3, cols=3, mines=0, difficulty="whatever")
+
+        # Reset cells
+        for r in range(b.rows):
+            for c in range(b.cols):
+                b.cells[r][c] = Cell()
+
+        # Place a single mine at (0,0) so (1,1) sees count=1
+        b.cells[0][0].is_mine = True
+        b._calculate_neighbor_counts()
+
+        # Reveal (1,1), leave all neighbors hidden and unflagged
+        b.cells[1][1].is_revealed = True
+        self.assertEqual(b.cells[1][1].neighbor_mines, 1)
+
+        moves = self.solver.solve_step(b)
+        self.assertEqual(moves, [])
+
+    def test_overlap_check_unique_flag_from_multiple_frontiers(self):
+        """
+        T4: Overlap Check (Seen Moves)
+        Two adjacent '1' cells share a single mine. The solver will analyze both
+        frontier cells, but must only emit the flag move for that mine once.
+
+        Layout (M = mine, . = safe):
+
+          .  M  .
+          .  .  .
+          .  .  .
+
+        We force (0,0) and (0,2) to be revealed with neighbor_mines=1,
+        and all their other neighbors revealed except the shared hidden mine (0,1).
+        Both frontier cells see the same remaining hidden neighbor (0,1),
+        so solver should produce a single (0,1,'FLAG') move.
+        """
+        b = Board(rows=3, cols=3, mines=0, difficulty="whatever")
+
+        # Reset cells
+        for r in range(b.rows):
+            for c in range(b.cols):
+                b.cells[r][c] = Cell()
+
+        # Single mine at (0,1)
+        b.cells[0][1].is_mine = True
+        b._calculate_neighbor_counts()
+
+        # Reveal everything except (0,1)
+        for r in range(b.rows):
+            for c in range(b.cols):
+                if (r, c) != (0, 1):
+                    b.cells[r][c].is_revealed = True
+
+        # Ensure (0,0) and (0,2) are frontier numbered cells with count=1
+        self.assertEqual(b.cells[0][0].neighbor_mines, 1)
+        self.assertEqual(b.cells[0][2].neighbor_mines, 1)
+
+        moves = self.solver.solve_step(b)
+
+        # Expect exactly one unique flag move at (0,1)
+        flag_moves = [m for m in moves if m[2] == "FLAG"]
+        self.assertEqual(len(flag_moves), 1)
+        self.assertEqual(flag_moves[0], (0, 1, "FLAG"))
+
+        # Also ensure there are no duplicate moves overall
+        self.assertEqual(len(moves), len(set(moves)))
+
+    # ---------------- T5–T6: Subset Logic ----------------
+
+    def test_subset_basic_reveal(self):
+        """
+        T5: Basic Subset Reveal (Subset Deduction)
+
+        We construct:
+          - Frontier cell A at (0,1)
+          - Frontier cell B at (1,1)
+
+        Hidden sets:
+          Hidden_A = { (1,0), (1,1) }
+          Hidden_B = { (1,0), (1,1), (2,1) }
+
+        Mines_A = 1, Mines_B = 1  => remaining_mines_A = remaining_mines_B = 1
+
+        Since Hidden_A ⊂ Hidden_B and the required remaining mines are equal,
+        the extra cells D = Hidden_B - Hidden_A = { (2,1) } must all be safe.
+
+        Solver should REVEAL (2,1).
+        """
+        b = Board(rows=3, cols=3, mines=0, difficulty="whatever")
+
+        # Clean slate
+        for r in range(b.rows):
+            for c in range(b.cols):
+                b.cells[r][c] = Cell()
+
+        # Coordinates:
+        #   A = (0,1)
+        #   B = (1,1)
+        A = (0, 1)
+        B = (1, 1)
+
+        # Start by revealing everything we don't want hidden
+        # We'll then "unreveal" the hidden sets explicitly.
+        for r in range(b.rows):
+            for c in range(b.cols):
+                b.cells[r][c].is_revealed = True
+
+        # Hidden sets as described:
+        hidden_A = {(1, 0), (1, 1)}
+        hidden_B = {(1, 0), (1, 1), (2, 1)}
+        all_hidden = hidden_B  # union
+
+        for (r, c) in all_hidden:
+            b.cells[r][c].is_revealed = False  # hidden, not flagged
+
+        # Frontier cells themselves must be revealed numbered cells
+        b.cells[A[0]][A[1]].is_revealed = True
+        b.cells[B[0]][B[1]].is_revealed = True
+
+        # We directly set neighbor_mines so that:
+        # remaining_mines_A = remaining_mines_B = 1
+        b.cells[A[0]][A[1]].neighbor_mines = 1
+        b.cells[B[0]][B[1]].neighbor_mines = 1
+
+        moves = self.solver.solve_step(b)
+
+        # Expect at least one REVEAL move at (2,1)
+        self.assertIn((2, 1, "REVEAL"), moves)
+
+        # Ensure we didn't incorrectly flag (2,1)
+        self.assertNotIn((2, 1, "FLAG"), moves)
+
+    def test_subset_basic_flag(self):
+        """
+        T6: Subset Flag (Subset Deduction - mines in the difference set)
+
+        Same geometry as T5, but we adjust the mine counts:
+
+          Hidden_A = { (1,0), (1,1) }
+          Hidden_B = { (1,0), (1,1), (2,1) }
+
+        Let remaining_mines_A = 1, remaining_mines_B = 2.
+        (No flags around them, so neighbor_mines = remaining_mines.)
+
+        Then:
+          extra_mines = remaining_mines_B - remaining_mines_A = 1
+          D = Hidden_B - Hidden_A = { (2,1) }
+          |D| = 1
+
+        Since extra_mines == |D|, all cells in D must be mines.
+
+        Solver should FLAG (2,1).
+        """
+        b = Board(rows=3, cols=3, mines=0, difficulty="whatever")
+
+        # Clean slate
+        for r in range(b.rows):
+            for c in range(b.cols):
+                b.cells[r][c] = Cell()
+
+        A = (0, 1)
+        B = (1, 1)
+
+        # Reveal everything initially
+        for r in range(b.rows):
+            for c in range(b.cols):
+                b.cells[r][c].is_revealed = True
+
+        hidden_A = {(1, 0), (1, 1)}
+        hidden_B = {(1, 0), (1, 1), (2, 1)}
+        all_hidden = hidden_B
+
+        for (r, c) in all_hidden:
+            b.cells[r][c].is_revealed = False
+
+        # Frontier cells A and B revealed
+        b.cells[A[0]][A[1]].is_revealed = True
+        b.cells[B[0]][B[1]].is_revealed = True
+
+        # No flagged neighbors for simplicity
+        # Set neighbor_mines so remaining_mines_A = 1, remaining_mines_B = 2
+        b.cells[A[0]][A[1]].neighbor_mines = 1
+        b.cells[B[0]][B[1]].neighbor_mines = 2
+
+        moves = self.solver.solve_step(b)
+
+        # Expect a FLAG move at (2,1)
+        self.assertIn((2, 1, "FLAG"), moves)
+
+        # And we should not see a reveal for (2,1)
+        self.assertNotIn((2, 1, "REVEAL"), moves)
+
 
 if __name__ == "__main__":
     unittest.main()
