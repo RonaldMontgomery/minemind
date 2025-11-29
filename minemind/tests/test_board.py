@@ -840,7 +840,7 @@ class TestSolverTrivialAndSubsetRules(unittest.TestCase):
         Snippet 15: Subset Reveal Test (conceptual version, cleaned up)
 
         Tests the subset deduction: If Hidden(A) ⊂ Hidden(B) AND Mines(A) == Mines(B),
-        then Hidden(B) \ Hidden(A) must be safe (REVEAL).
+        then Hidden(B) \\ Hidden(A) must be safe (REVEAL).
 
         We encode this with a simple 3x3 setup:
 
