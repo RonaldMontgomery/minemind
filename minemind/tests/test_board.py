@@ -536,7 +536,7 @@ class TestSolverTrivialRules(unittest.TestCase):
             for (nr, nc) in neighbors
             if (nr, nc) != (0, 0)
         )
-        reveal_moves = sorted(m for m in moves if m[2] == ["REVEAL"])
+        reveal_moves = sorted(m for m in moves if m[2] == "REVEAL")
         self.assertEqual(reveal_moves, expected_reveals)
 
     def test_no_certainty_returns_empty_move_list(self):
