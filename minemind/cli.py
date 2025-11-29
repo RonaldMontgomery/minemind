@@ -2,7 +2,7 @@
 
 import cmd
 from minemind.core.board import Board
-from minemind.render import display_board
+from .render import display_board
 
 
 class MinemindShell(cmd.Cmd):
@@ -19,6 +19,8 @@ class MinemindShell(cmd.Cmd):
         # Create a default beginner board immediately upon starting the shell
         print("Starting new Beginner game...")
         self.board = Board(difficulty="beginner")
+        # Show the fresh board
+        display_board(self.board)
 
     # ------------------ Game Commands ------------------
 
@@ -46,10 +48,8 @@ class MinemindShell(cmd.Cmd):
             print("Error: Usage is 'new [difficulty]' or 'new <rows> <cols> <mines>'")
             return
         
-        # After creating a new board, render it (Next step!)
-        # self._render_board() 
-        print(f"Game reset. Ready to play.")
-
+        print("Game reset. Ready to play.")
+        display_board(self.board)
 
     def do_reveal(self, arg):
         'Reveal a cell: reveal <row> <col>'
@@ -68,23 +68,27 @@ class MinemindShell(cmd.Cmd):
 
         # Check bounds before calling the board
         if not (0 <= r < self.board.rows and 0 <= c < self.board.cols):
-            print(f"Error: Coordinates ({r}, {c}) are outside the board boundaries (0-{self.board.rows-1}, 0-{self.board.cols-1}).")
+            print(
+                f"Error: Coordinates ({r}, {c}) are outside the board "
+                f"boundaries (0-{self.board.rows-1}, 0-{self.board.cols-1})."
+            )
             return
         
         if self.board.state != "PLAYING":
             print(f"Cannot reveal. Game is already {self.board.state}.")
+            display_board(self.board)
             return
 
         # Core logic execution
         self.board.reveal(r, c)
         
-        # NOTE: Rendering the board happens here (next step!)
-        # self._render_board() 
-        
         # Check for game end state (output is handled inside board.py for now)
         if self.board.state != "PLAYING":
             print(f"Game over! Final state: {self.board.state}")
-            # Logic to reveal the whole board goes here.
+            # Board will be rendered with all mines visible, wrong flags as 'X', etc.
+
+        # Always show the current board after a reveal
+        display_board(self.board)
 
     def do_flag(self, arg):
         'Toggle flag on a cell: flag <row> <col>'
@@ -107,14 +111,15 @@ class MinemindShell(cmd.Cmd):
             return
         
         if self.board.state != "PLAYING":
-            print(f"Cannot flag. Game is over.")
+            print("Cannot flag. Game is over.")
+            display_board(self.board)
             return
 
         # Core logic execution
         self.board.flag(r, c)
         
-        # NOTE: Rendering the board happens here (next step!)
-        # self._render_board() 
+        # Show the updated board after flagging
+        display_board(self.board)
 
     # ------------------ Utility Commands ------------------
     
@@ -125,13 +130,12 @@ class MinemindShell(cmd.Cmd):
 
     def do_exit(self, arg):
         'Exit the shell: exit or quit'
-        return True # Quits the Cmd loop
+        return True
 
     def do_quit(self, arg):
         'Exit the shell: exit or quit'
         return self.do_exit(arg)
 
-# ------------------ Main Entry Point ------------------
 
 def main():
     MinemindShell().cmdloop()
