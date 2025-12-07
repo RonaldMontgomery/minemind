@@ -20,7 +20,7 @@
 - `cli.py` + `render.py`: user interface and text rendering; shell dispatches to board/solver.
 
 ## Invariants
-- **DSU (future use)**: parent pointers form forests; `find(x)` returns canonical root; rank/size non-negative; unions only merge distinct sets. (Module is currently a stub; keep these if implemented.)
+- **DSU (future use)**: parent pointers form forests; `find(x)` returns canonical root; rank/size non-negative; unions only merge distinct sets.
 - **Board**:
   - `rows, cols > 0`; `mines` clamped to `[0, rows*cols-1]`.
   - `state` ? {`PLAYING`, `WON`, `LOST`}; monotonic transitions (never revert to PLAYING after win/loss).

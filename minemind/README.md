@@ -23,14 +23,14 @@ Minesweeper-in-the-terminal with a small deterministic solver. The CLI starts an
 - A fresh beginner board is created on launch; the first reveal is always safe and triggers mine placement.
 
 ## Command Cheatsheet (with examples)
-- `help` / `?` — list commands.
-- `new` — start a new game.
+- `help` / `?` list commands.
+- `new` start a new game.
   - Preset difficulty: `new beginner` | `new intermediate` | `new expert`.
   - Custom: `new 12 16 30` (rows cols mines).
-- `reveal <r> <c>` — reveal a cell, e.g., `reveal 3 4`.
-- `flag <r> <c>` — toggle a flag, e.g., `flag 2 7`.
-- `solve` — run one solver step; applies all certain flags/reveals it finds.
-- `exit` / `quit` — leave the shell.
+- `reveal <r> <c>` reveal a cell, e.g., `reveal 3 4`.
+- `flag <r> <c>` toggle a flag, e.g., `flag 2 7`.
+- `solve` run one solver step; applies all certain flags/reveals it finds.
+- `exit` / `quit` leave the shell.
 
 ## Known Limitations
 - Solver only applies deterministic trivial + subset rules; no guessing/probabilistic play.
