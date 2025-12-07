@@ -94,7 +94,7 @@ class TestSolverTrivialRules(unittest.TestCase):
 
     def test_flagged_neighbors_not_considered_for_moves(self):
         """
-        T4: Out-of-Bounds/Filtering – ignores flagged neighbors as candidates.
+        T4: Out-of-Bounds/Filtering - ignores flagged neighbors as candidates.
         3x3 board.
         Mine at (0,0). (0,1) is flagged. Reveal (1,1) (count 1).
         Solver must ignore flagged cells as targets.
@@ -308,7 +308,7 @@ class TestSolverTrivialAndSubsetRules(unittest.TestCase):
 
     def test_subset_reveal_rule(self):
         """
-        Conceptual Subset Reveal Test.
+        T7: Conceptual Subset Reveal Test.
         Hidden(A) ⊂ Hidden(B) and equal remaining mines => B \\ A are safe.
         """
         b = Board(rows=3, cols=3, mines=0, difficulty="whatever")

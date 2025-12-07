@@ -389,6 +389,226 @@ class TestBoardWinConditionLogic(unittest.TestCase):
         b.reveal(1, 1)
         self.assertEqual(b.state, "PLAYING")
 
+class TestGameFlowPublicMethods(unittest.TestCase):
+    """Integration tests for Board.reveal and Board.flag."""
+
+    def test_first_reveal_places_mines_and_reveals_cell(self):
+        """
+        First call to reveal(r, c) should:
+          - place mines (mines_placed becomes True),
+          - never reveal a mine on that first click,
+          - leave board.state == 'PLAYING' if the click is safe,
+          - mark the chosen cell as revealed.
+        """
+        b = Board(difficulty="beginner")
+
+        self.assertFalse(
+            b.mines_placed,
+            "Mines should not be placed before the first reveal().",
+        )
+        self.assertEqual(b.state, "PLAYING")
+
+        r, c = 4, 4
+        b.reveal(r, c)
+
+        self.assertTrue(
+            b.mines_placed,
+            "First reveal() call should place mines.",
+        )
+        self.assertTrue(
+            b.cells[r][c].is_revealed,
+            "Clicked cell must be revealed after reveal().",
+        )
+        self.assertFalse(
+            b.cells[r][c].is_mine,
+            "By design, first revealed cell must never be a mine.",
+        )
+        self.assertEqual(
+            b.state,
+            "PLAYING",
+            "Safe first click must not end the game.",
+        )
+
+    def test_reveal_mine_transitions_to_lost(self):
+        """
+        Revealing a mine after mines have been placed should set state to LOST
+        and reveal that mine cell.
+        """
+        # Small deterministic board
+        b = Board(rows=2, cols=2, mines=1, difficulty="whatever")
+
+        # Reset and manually define mine layout.
+        for r in range(b.rows):
+            for c in range(b.cols):
+                b.cells[r][c] = Cell()
+
+        mine_pos = (0, 0)
+        b.cells[mine_pos[0]][mine_pos[1]].is_mine = True
+        b._calculate_neighbor_counts()
+        b.mines_placed = True  # Pretend mines already placed
+
+        self.assertEqual(b.state, "PLAYING")
+
+        # Click directly on the mine
+        b.reveal(*mine_pos)
+
+        self.assertEqual(b.state, "LOST")
+        self.assertTrue(b.cells[mine_pos[0]][mine_pos[1]].is_revealed)
+
+    def test_flag_toggles_on_hidden_cell_only(self):
+        """
+        flag(r,c) should toggle is_flagged on a hidden cell and must not
+        reveal it or affect already revealed cells.
+        """
+        b = Board(rows=3, cols=3, mines=0, difficulty="whatever")
+
+        # Work on a hidden cell
+        r, c = 1, 1
+        self.assertFalse(b.cells[r][c].is_revealed)
+        self.assertFalse(b.cells[r][c].is_flagged)
+
+        # First flag -> set flag
+        b.flag(r, c)
+        self.assertTrue(b.cells[r][c].is_flagged)
+        self.assertFalse(b.cells[r][c].is_revealed)
+
+        # Second flag -> unflag
+        b.flag(r, c)
+        self.assertFalse(b.cells[r][c].is_flagged)
+        self.assertFalse(b.cells[r][c].is_revealed)
+
+        # reveal the cell and ensure flag() does nothing
+        b.reveal(r, c)
+        self.assertTrue(b.cells[r][c].is_revealed)
+        was_flagged = b.cells[r][c].is_flagged
+        b.flag(r, c)
+        self.assertEqual(
+            b.cells[r][c].is_flagged,
+            was_flagged,
+            "flag() should not change flags on already revealed cells.",
+        )
+
+class TestFloodFillViaReveal(unittest.TestCase):
+    """
+    Tests that reveal() correctly flood-fills zero-valued regions and
+    does not reveal mines.
+    """
+
+    def test_zero_region_reveal_reveals_all_safes_but_not_mines(self):
+        """
+        On a 5x5 board with a single mine at (0,0), revealing a far-away
+        zero cell should reveal every non-mine cell but leave the mine
+        itself hidden.
+        """
+        b = Board(rows=5, cols=5, mines=0, difficulty="whatever")
+
+        # Clean slate & deterministic mine layout
+        for r in range(b.rows):
+            for c in range(b.cols):
+                b.cells[r][c] = Cell()
+
+        mine_pos = (0, 0)
+        b.cells[mine_pos[0]][mine_pos[1]].is_mine = True
+        b._calculate_neighbor_counts()
+        b.mines_placed = True  # Avoid _place_mines modifying layout
+
+        # Choose a corner far away, guaranteed to have neighbor_mines == 0
+        start = (4, 4)
+        self.assertEqual(
+            b.cells[start[0]][start[1]].neighbor_mines,
+            0,
+            "Setup assumption failed: starting cell is not a zero.",
+        )
+
+        b.reveal(*start)
+
+        # The mine must remain hidden
+        self.assertFalse(b.cells[mine_pos[0]][mine_pos[1]].is_revealed)
+
+        # All other cells should be revealed
+        for r in range(b.rows):
+            for c in range(b.cols):
+                if (r, c) == mine_pos:
+                    continue
+                with self.subTest(r=r, c=c):
+                    self.assertTrue(
+                        b.cells[r][c].is_revealed,
+                        "Flood fill should reveal all non-mine cells "
+                        "for this configuration.",
+                    )
+
+class TestWinConditionLogic(unittest.TestCase):
+    """Tests for transitioning to WON only when all non-mine cells are revealed."""
+
+    def test_state_becomes_won_after_last_safe_revealed(self):
+        """
+        2x2 board with a single mine at (0,0).
+        Revealing the three safe cells one by one should set the game
+        state to WON after the last safe reveal.
+        """
+        b = Board(rows=2, cols=2, mines=1, difficulty="whatever")
+
+        # Controlled layout
+        for r in range(b.rows):
+            for c in range(b.cols):
+                b.cells[r][c] = Cell()
+
+        mine_pos = (0, 0)
+        b.cells[mine_pos[0]][mine_pos[1]].is_mine = True
+        b._calculate_neighbor_counts()
+        b.mines_placed = True
+
+        safe_cells = [(0, 1), (1, 0), (1, 1)]
+
+        self.assertEqual(b.state, "PLAYING")
+
+        # Reveal first two safe cells
+        b.reveal(*safe_cells[0])
+        self.assertEqual(b.state, "PLAYING")
+
+        b.reveal(*safe_cells[1])
+        self.assertEqual(b.state, "PLAYING")
+
+        # Reveal final safe cell -> should win
+        b.reveal(*safe_cells[2])
+        self.assertEqual(b.state, "WON")
+
+        # All non-mine cells must be revealed
+        for r in range(b.rows):
+            for c in range(b.cols):
+                if (r, c) == mine_pos:
+                    continue
+                with self.subTest(r=r, c=c):
+                    self.assertTrue(b.cells[r][c].is_revealed)
+
+    def test_state_does_not_become_won_if_any_safe_cell_hidden(self):
+        """
+        Even if all mines are correctly flagged, the game must not be WON
+        while there is at least one hidden non-mine cell.
+        """
+        b = Board(rows=2, cols=2, mines=1, difficulty="whatever")
+
+        # Controlled layout
+        for r in range(b.rows):
+            for c in range(b.cols):
+                b.cells[r][c] = Cell()
+
+        mine_pos = (0, 0)
+        b.cells[mine_pos[0]][mine_pos[1]].is_mine = True
+        b._calculate_neighbor_counts()
+        b.mines_placed = True
+
+        # Flag the mine and reveal ONLY two of the three safe cells
+        b.flag(*mine_pos)
+        b.reveal(0, 1)
+        b.reveal(1, 0)
+
+        self.assertEqual(
+            b.state,
+            "PLAYING",
+            "Game should not be WON while a safe cell remains hidden.",
+        )
+        self.assertFalse(b.cells[1][1].is_revealed)
 
 @unittest.skip("CLI validation tests depend on concrete helpers in cli.py; add when helpers are stable.")
 class TestCLIValidation(unittest.TestCase):
