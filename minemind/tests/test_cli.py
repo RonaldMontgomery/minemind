@@ -15,7 +15,7 @@ class TestCliNewCommand(unittest.TestCase):
         """
         MinemindShell.__init__ already starts a beginner game.
 
-        This test just verifies that:
+        This test verifies that:
           - we start with a valid beginner board
           - calling 'new beginner' again still gives a beginner-config board.
         """
