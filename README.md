@@ -1,82 +1,47 @@
 # minemind
 
-**A custom Python package that launches an interactive Read-Eval-Print Loop (REPL) environment.**
-
-## Overview
-
-The `minemind` package provides a custom command-line interface (CLI) that allows users to interact with the core application logic (board generation, solving, state management, etc.) found within the `minemind/core` module.
-
-The application is launched via the `minemind` command, which starts a persistent shell environment for executing game or solver actions.
-
------
+Minesweeper-in-the-terminal with a small deterministic solver. The CLI starts an interactive shell so you can create boards, reveal/flag cells, and ask the solver to apply guaranteed moves.
 
 ## Installation
+- Prereqs: Python 3.8+ and `pip`.
+- Optional but recommended: `python -m venv .venv && .\.venv\Scripts\activate` (Windows PowerShell) or `source .venv/bin/activate` (Unix).
+- Install in editable mode from the repo root:
+  ```bash
+  pip install -e .
+  ```
 
-### Prerequisites
+## Run
+- Start the shell (installs the `minemind` entry point via `pyproject.toml`):
+  ```bash
+  minemind
+  ```
+  or
+  ```bash
+  python -m minemind
+  ```
+- Coordinates are zero-based: `row col`.
+- A fresh beginner board is created on launch; the first reveal is always safe and triggers mine placement.
 
-  * Python **3.8 or higher** is required.
+## Command Cheatsheet (with examples)
+- `help` / `?` list commands.
+- `new` start a new game.
+  - Preset difficulty: `new beginner` | `new intermediate` | `new expert`.
+  - Custom: `new 12 16 30` (rows cols mines).
+- `reveal <r> <c>` reveal a cell, e.g., `reveal 3 4`.
+- `flag <r> <c>` toggle a flag, e.g., `flag 2 7`.
+- `solve` run one solver step; applies all certain flags/reveals it finds.
+- `exit` / `quit` leave the shell.
 
-### Local Installation (Developer Mode)
+## Known Limitations
+- Solver only applies deterministic trivial + subset rules; no guessing/probabilistic play.
+- Subset logic is pairwise only; no full CSP/advanced pattern search.
+- Some helper modules (`dsu.py`, `lru.py`, `rng.py`, `signatures.py`, `snapshot.py`) are stubs today.
+- `board.py` contains duplicated legacy functions outside the class; they are unused but remain present.
+- CLI is text-only (no colors), zero-based indexing, and has minimal validation beyond what tests cover.
 
-1. Navigate to the project root:
-    ```bash
-    cd /path/to/minemind
-    ```
-
-2. Install in editable mode:
-    ```bash
-    pip install -e .
-    ```
-
------
-
-## Usage
-
-Launch the application:
-
-```bash
-minemind
-```
-
-You will see:
-
-```
-Welcome to the minemind shell. Type help or ? to list commands.
-(minemind)
-```
-
-### Shell Commands (from `cli.py`)
-
-| Command | Description |
-|--------|-------------|
-| `help` or `?` | Show available commands |
-| `exit` / `quit` | Exit the shell |
-| `new`, `solve`, `flag`, `render` | Example custom commands |
-
------
-
-## Running Tests
-
-From the project root:
-
-```bash
-python -m unittest discover -s minemind\tests -p "test_*.py"
-```
-
------
-
-## Project Structure
-
-```
-minemind/
-├── minemind/
-│   ├── __main__.py
-│   ├── cli.py
-│   ├── render.py
-│   └── core/
-│       ├── board.py
-│       ├── solver.py
-│       └── ...
-├── pyproject.toml
-└── tests/
-```
+## Tests
+- Run with pytest from the repo root:
+  ```bash
+  python -m pytest
+  ```
+- The suite is built on `unittest`; pytest will discover and run it.
