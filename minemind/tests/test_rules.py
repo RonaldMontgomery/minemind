@@ -309,7 +309,7 @@ class TestSolverTrivialAndSubsetRules(unittest.TestCase):
     def test_subset_reveal_rule(self):
         """
         Conceptual Subset Reveal Test.
-        Hidden(A) ⊂ Hidden(B) and equal remaining mines => B \ A are safe.
+        Hidden(A) ⊂ Hidden(B) and equal remaining mines => B \\ A are safe.
         """
         b = Board(rows=3, cols=3, mines=0, difficulty="whatever")
 

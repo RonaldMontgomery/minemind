@@ -48,7 +48,7 @@ class Board:
         if difficulty in self.STANDARD_CONFIGS and rows is None and cols is None:
             return self.STANDARD_CONFIGS[difficulty]
         
-        # 2. FIX: Handle invalid difficulty with NO custom sizes (falls back to Beginner)
+        # 2. Handle invalid difficulty with NO custom sizes
         is_custom_size_provided = rows is not None or cols is not None
         if difficulty not in self.STANDARD_CONFIGS and not is_custom_size_provided:
              return DEFAULT_ROWS, DEFAULT_COLS, DEFAULT_MINES 
@@ -80,9 +80,9 @@ class Board:
         self.mines = final_mines
         self.total_cells = final_rows * final_cols
         self.state = "PLAYING"
-        self.mines_placed = False # Crucial flag for deferred setup
+        self.mines_placed = False # Flag for deferred setup
 
-        # Initialize the 2D grid of Cell objects
+        # Initialize the grid of Cell objects
         self.cells: List[List[Cell]] = []
         for r in range(self.rows):
             row = []
@@ -92,7 +92,7 @@ class Board:
             
         # print(f"Initialized board: {self.rows}x{self.cols} with {self.mines} mines.")
         
-    # --- CORE LOGIC IMPLEMENTATION START ---
+    # --- CORE LOGIC ---
 
     def _get_neighbors_coords(self, r: int, c: int) -> List[Tuple[int, int]]:
         """
@@ -168,13 +168,11 @@ class Board:
                     cell.neighbor_mines = mine_count
 
 
-    # --- Game Flow / Public Methods ---
-
-# --- Game Flow / Public Methods ---
+    # --- Game Flow  ---
 
     def reveal(self, r: int, c: int) -> None:
         """Handles the user clicking a cell to reveal it."""
-        from collections import deque # Required for flood-fill (BFS)
+        from collections import deque
 
         # 1. Input/State Validation
         if not (0 <= r < self.rows and 0 <= c < self.cols and self.state == "PLAYING"):
@@ -194,14 +192,14 @@ class Board:
         if cell.is_mine:
             cell.is_revealed = True
             self.state = "LOST"
-            # print("💥 GAME OVER: You hit a mine!") # CLI handles user output
+            # print("GAME OVER: You hit a mine!") # CLI handles user output
             return
             
         # 4. Reveal & Flood-Fill
         cell.is_revealed = True
         
         if cell.neighbor_mines == 0:
-            self._flood_reveal(r, c, deque) # Pass deque since it's not a class import
+            self._flood_reveal(r, c, deque)
             
         # 5. Check Win Condition
         self._check_win_condition()
@@ -217,7 +215,6 @@ class Board:
         """
         Performs a Breadth-First Search (BFS) to cascade reveals from a zero cell.
         """
-        # We use a custom argument for deque to avoid circular import issues in core/board.py
         queue = deque_class([(start_r, start_c)])
         
         while queue:
@@ -245,7 +242,7 @@ class Board:
             for c in range(self.cols):
                 cell = self.cells[r][c]
                 
-                # We count hidden cells that are NOT mines
+                # Count hidden cells that are NOT mines
                 if not cell.is_revealed and not cell.is_mine:
                     hidden_non_mines += 1
                     
@@ -263,27 +260,27 @@ def reveal(self, r: int, c: int) -> None:
     if cell.is_revealed or cell.is_flagged:
         return
         
-    # 2. Deferred Setup (FIRST CLICK LOGIC)
+    # 2. Deferred Setup
     if not self.mines_placed:
         self._place_mines(r, c)
         self._calculate_neighbor_counts()
-        # NOTE: self.mines_placed is set to True inside _place_mines
+        # self.mines_placed is set to True inside _place_mines
         
     # 3. Mine Check (LOSE CONDITION)
     if cell.is_mine:
         cell.is_revealed = True
         self.state = "LOST"
-        print("💥 GAME OVER: You hit a mine!")
+        print("GAME OVER: You hit a mine!")
         return
         
-    # 4. Reveal & Flood-Fill
+    # 4. Reveal & fill
     cell.is_revealed = True
     
     if cell.neighbor_mines == 0:
-        self._flood_reveal(r, c) # Needs to be implemented below
+        self._flood_reveal(r, c)
         
     # 5. Check Win Condition
-    self._check_win_condition() # Needs to be implemented below
+    self._check_win_condition()
 
 def _flood_reveal(self, start_r: int, start_c: int) -> None:
     """
@@ -318,7 +315,7 @@ def _check_win_condition(self) -> None:
         for c in range(self.cols):
             cell = self.cells[r][c]
             
-            # We count hidden cells that are NOT mines
+            # count hidden cells that are NOT mines
             if not cell.is_revealed and not cell.is_mine:
                 hidden_cells += 1
                 
@@ -344,7 +341,5 @@ def main():
     b._place_mines(safe_r=2, safe_c=2)
     b._calculate_neighbor_counts()
     
-    # You would then inspect b.cells to verify placement/counts manually or in a test.
-
 if __name__ == '__main__':
     main()

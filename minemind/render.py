@@ -50,7 +50,7 @@ def display_board(board):
 
     output = []
 
-    # 1. Print Column Indices (Header)
+    # 1. Print Column Headers
     col_header = "    " + " ".join(str(c).ljust(2) for c in range(cols))
     output.append(col_header)
     output.append("   " + "---" * cols)
