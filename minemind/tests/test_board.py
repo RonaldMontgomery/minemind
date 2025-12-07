@@ -610,13 +610,10 @@ class TestWinConditionLogic(unittest.TestCase):
         )
         self.assertFalse(b.cells[1][1].is_revealed)
 
-@unittest.skip("CLI validation tests depend on concrete helpers in cli.py; add when helpers are stable.")
+@unittest.skip("Replace with real CLI tests once helpers are available.")
 class TestCLIValidation(unittest.TestCase):
     """
     Placeholder suite for CLI / input validation tests.
-
-    Once cli.py exposes testable helpers (e.g., parse_move or validate_move),
-    you can import them here and replace these skipped tests.
     """
 
     def test_example_placeholder(self):
