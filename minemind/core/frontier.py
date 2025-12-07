@@ -2,7 +2,7 @@
 """
 Frontier utilities for MineMind.
 
-A *frontier* is the set of revealed numbered cells that are adjacent to at
+A frontier is the set of revealed numbered cells that are adjacent to at
 least one hidden (unrevealed and unflagged) cell.  These cells are the only
 places where the solver can extract new information about the unknown region.
 """
