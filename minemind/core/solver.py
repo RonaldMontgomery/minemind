@@ -1,96 +1,185 @@
 # minemind/core/solver.py
 
-"""
-Solver logic for Minemind.
-
-This module exposes a single public entry point:
-
-    MinemindSolver.solve_step(board) -> list[(row, col, action)]
-
-where action is either "FLAG" or "REVEAL".
-
-Implemented reasoning:
-
-- T1: Trivial Flag Rule (all remaining hidden neighbors are mines).
-- T2: Trivial Reveal Rule (all remaining hidden neighbors are safe).
-- T3: No-certainty case (returns []).
-- T4: Seen-moves de-duplication across overlapping frontiers.
-- T5/T6: Simple 2-cell subset logic:
-
-    Let H(A), H(B) be sets of hidden neighbors of frontier cells A, B.
-    Let mA, mB be remaining mines around A, B after accounting for flags.
-
-    1. If H(A) ⊂ H(B) and mA == mB:
-           All cells in H(B) \ H(A) are safe → REVEAL.
-
-    2. If H(A) ⊂ H(B) and mB - mA == |H(B) \ H(A)| > 0:
-           All cells in H(B) \ H(A) are mines → FLAG.
-"""
-
 from __future__ import annotations
 
-from typing import Iterable, List, Tuple, Dict, Set
+from typing import List, Tuple, Dict, Set
+from minemind.core.board import Board, Cell  # type: ignore[import]
 
-from .board import Board, Cell
-
-# A single solver move: (row, col, action) where action in {"FLAG", "REVEAL"}.
+# (row, col, action), where action is "REVEAL" or "FLAG"
 SolverMove = Tuple[int, int, str]
 
 
 class MinemindSolver:
-    """Stateless one-step Minesweeper solver."""
+    """
+    Implements basic logical algorithms to solve a Minesweeper board.
 
-    @staticmethod
-    def _get_frontier_cells(board: Board) -> Iterable[Tuple[int, int]]:
-        """
-        Yield coordinates of all 'frontier' numbered cells.
+    Rules implemented:
 
-        A frontier cell is:
-          - revealed
-          - not a mine
-          - neighbor_mines > 0
-          - and has at least one hidden neighbor
+      1. Trivial Flag Rule
+         For a revealed numbered cell C:
+
+             neighbor_mines = C.neighbor_mines
+             F  = number of flagged neighbors
+             H  = set of hidden, unflagged neighbors
+
+         If neighbor_mines - F == len(H) and > 0:
+             All cells in H are mines → FLAG.
+
+      2. Trivial Reveal Rule
+         If F == neighbor_mines:
+             All cells in H are safe → REVEAL.
+
+      3. Subset Rules (using a frontier of numbered cells)
+         For two frontier cells A and B with:
+
+             H(A) = hidden neighbors of A
+             H(B) = hidden neighbors of B
+             mA   = mines still needed for A
+             mB   = mines still needed for B
+
+         We use:
+
+           - Safe difference (subset reveal):
+               If H(A) ⊂ H(B) and mA == mB:
+                 All cells in H(B) - H(A) are safe → REVEAL.
+
+           - Mine difference (subset flag):
+               If H(A) ⊂ H(B) and mB - mA == |H(B) - H(A)| > 0:
+                 All cells in H(B) - H(A) are mines → FLAG.
+
+    All moves are deduplicated via a seen_moves set.
+    """
+
+    # ------------------------------------------------------------------ #
+    # Frontier helpers
+    # ------------------------------------------------------------------ #
+
+    def _get_frontier_cells(self, board: Board) -> List[Tuple[int, int]]:
         """
+        Identifies revealed, numbered cells that have at least one hidden
+        (unrevealed and unflagged) neighbor. Those are the only cells the
+        solver needs to analyze.
+        """
+        frontier: List[Tuple[int, int]] = []
+
         for r in range(board.rows):
             for c in range(board.cols):
-                cell: Cell = board.cells[r][c]
+                cell = board.cells[r][c]
 
-                if not cell.is_revealed:
-                    continue
-                if cell.is_mine:
-                    continue
-                if cell.neighbor_mines <= 0:
+                # Only consider revealed numbered cells
+                if not cell.is_revealed or cell.neighbor_mines <= 0:
                     continue
 
-                neighbors = board._get_neighbors_coords(r, c)
-                if any(not board.cells[nr][nc].is_revealed for (nr, nc) in neighbors):
-                    yield (r, c)
+                # Check if it has any hidden, unflagged neighbor
+                has_hidden = False
+                for nr, nc in board._get_neighbors_coords(r, c):
+                    n_cell = board.cells[nr][nc]
+                    if not n_cell.is_revealed and not n_cell.is_flagged:
+                        has_hidden = True
+                        break
+
+                if has_hidden:
+                    frontier.append((r, c))
+
+        return frontier
+
+    # ------------------------------------------------------------------ #
+    # Core solving step
+    # ------------------------------------------------------------------ #
+
+    def solve_step(self, board: Board) -> List[SolverMove]:
+        """
+        Finds all logically certain moves (REVEAL or FLAG) for one step.
+
+        Returns a list of (row, col, action) tuples.
+        """
+        certain_moves: List[SolverMove] = []
+        seen_moves: Set[SolverMove] = set()
+
+        frontier = self._get_frontier_cells(board)
+
+        # Collect per-frontier-cell data for subset logic
+        frontier_data: List[Dict] = []
+
+        for r, c in frontier:
+            cell = board.cells[r][c]
+            n = cell.neighbor_mines
+
+            hidden_neighbors: List[Tuple[int, int]] = []
+            flagged_neighbors = 0
+
+            # Classify neighbors
+            for nr, nc in board._get_neighbors_coords(r, c):
+                neighbor = board.cells[nr][nc]
+                if neighbor.is_flagged:
+                    flagged_neighbors += 1
+                elif not neighbor.is_revealed:
+                    hidden_neighbors.append((nr, nc))
+
+            if not hidden_neighbors:
+                # Nothing interesting around this cell
+                continue
+
+            remaining_mines = n - flagged_neighbors
+
+            # --- Trivial Flag Rule ---
+            # If all remaining hidden neighbors must be mines.
+            if remaining_mines == len(hidden_neighbors) and remaining_mines > 0:
+                for nr, nc in hidden_neighbors:
+                    move = (nr, nc, "FLAG")
+                    if move not in seen_moves:
+                        seen_moves.add(move)
+                        certain_moves.append(move)
+
+            # --- Trivial Reveal Rule ---
+            # If all mines are already flagged, remaining hidden are safe.
+            if flagged_neighbors == n:
+                for nr, nc in hidden_neighbors:
+                    move = (nr, nc, "REVEAL")
+                    if move not in seen_moves:
+                        seen_moves.add(move)
+                        certain_moves.append(move)
+
+            # Store data for subset logic if there are still unknowns around
+            if hidden_neighbors:
+                frontier_data.append(
+                    {
+                        "r": r,
+                        "c": c,
+                        "hidden_coords": set(hidden_neighbors),
+                        "remaining_mines": remaining_mines,
+                    }
+                )
+
+        # Apply subset-based deductions (T5–T7)
+        self._apply_subset_logic(frontier_data, certain_moves, seen_moves)
+
+        return certain_moves
+
+    # ----- Subset logic -----
 
     def _apply_subset_logic(
         self,
-        frontier_data: List[Dict[str, object]],
+        frontier_data: List[Dict],
         certain_moves: List[SolverMove],
         seen_moves: Set[SolverMove],
     ) -> None:
         """
-        Apply a simple 2-cell subset rule over the frontier.
-
-        For any pair of frontier cells A and B with hidden neighbor sets H(A),
-        H(B) and remaining mines mA, mB we use two cases:
-
-          1. If H(A) ⊂ H(B) and mB == mA:
-                 All cells in H(B) \\ H(A) are safe → REVEAL.
-
-          2. If H(A) ⊂ H(B) and mB - mA == |H(B) \\ H(A)| > 0:
-                 All cells in H(B) \\ H(A) are mines → FLAG.
+        Inspect pairs of frontier cells to find subset relationships
+        between their hidden neighbor sets and deduce additional flags
+        or reveals.
         """
         n = len(frontier_data)
+        if n < 2:
+            return
+
         for i in range(n):
             A = frontier_data[i]
-            hiddenA: Set[Tuple[int, int]] = A["hidden_coords"]  # type: ignore[index]
-            mA: int = A["mines_needed"]  # type: ignore[index]
+            H_a: Set[Tuple[int, int]] = A["hidden_coords"]
+            m_a: int = A["remaining_mines"]
 
-            if not hiddenA:
+            # If A's constraints are already impossible or trivial, skip it
+            if m_a < 0 or not H_a:
                 continue
 
             for j in range(n):
@@ -98,108 +187,35 @@ class MinemindSolver:
                     continue
 
                 B = frontier_data[j]
-                hiddenB: Set[Tuple[int, int]] = B["hidden_coords"]  # type: ignore[index]
-                mB: int = B["mines_needed"]  # type: ignore[index]
+                H_b: Set[Tuple[int, int]] = B["hidden_coords"]
+                m_b: int = B["remaining_mines"]
 
-                if not hiddenB:
+                if m_b < 0 or not H_b:
                     continue
 
-                # We only care about *strict* subset relations.
-                if not (hiddenA < hiddenB):
+                if not H_a < H_b:
                     continue
 
-                diff = hiddenB - hiddenA
+                diff = H_b - H_a
                 if not diff:
                     continue
 
-                extra_mines = mB - mA
+                extra_mines = m_b - m_a
 
-                # Case 1: same remaining mine count → diff must be all safe.
+                # Case 1: Same remaining mines but a larger hidden set => diff is safe
+                #   H(A) ⊂ H(B) and mA == mB → cells in diff are safe (REVEAL).
                 if extra_mines == 0:
-                    for (r, c) in diff:
-                        move: SolverMove = (r, c, "REVEAL")
+                    for r, c in diff:
+                        move = (r, c, "REVEAL")
                         if move not in seen_moves:
-                            certain_moves.append(move)
                             seen_moves.add(move)
-                    continue
+                            certain_moves.append(move)
 
-                # Case 2: all extra mines must live in the diff set.
-                if extra_mines == len(diff) and extra_mines > 0:
-                    for (r, c) in diff:
+                # Case 2: Extra mines exactly fill the difference set => diff all mines
+                #   H(A) ⊂ H(B) and mB - mA == |diff| > 0 → cells in diff are mines (FLAG).
+                elif extra_mines == len(diff) and extra_mines > 0:
+                    for r, c in diff:
                         move = (r, c, "FLAG")
                         if move not in seen_moves:
-                            certain_moves.append(move)
                             seen_moves.add(move)
-
-    # ----- Public API --------
-
-    def solve_step(self, board: Board) -> List[SolverMove]:
-        """
-        Compute a single batch of logically forced moves on the given board.
-
-        Returns:
-            A list of (row, col, action) tuples, where action is "FLAG" or
-            "REVEAL". If no certain deduction is possible, returns [].
-        """
-        certain_moves: List[SolverMove] = []
-        seen_moves: Set[SolverMove] = set()
-
-        frontier_data: List[Dict[str, object]] = []
-
-        # First pass: trivial rules and frontier summary.
-        for (r, c) in self._get_frontier_cells(board):
-            cell = board.cells[r][c]
-            n_mines = cell.neighbor_mines
-
-            hidden_coords: Set[Tuple[int, int]] = set()
-            flagged_count = 0
-
-            # Classify neighbors of this frontier cell.
-            for (nr, nc) in board._get_neighbors_coords(r, c):
-                neighbor = board.cells[nr][nc]
-                if neighbor.is_flagged:
-                    flagged_count += 1
-                elif not neighbor.is_revealed:
-                    # hidden & unflagged
-                    hidden_coords.add((nr, nc))
-
-            if not hidden_coords:
-                # Nothing unknown around this frontier cell.
-                continue
-
-            remaining_mines = n_mines - flagged_count
-
-            # All remaining hidden neighbors must be mines.
-            if remaining_mines == len(hidden_coords) and remaining_mines > 0:
-                for (nr, nc) in hidden_coords:
-                    move: SolverMove = (nr, nc, "FLAG")
-                    if move not in seen_moves:
-                        certain_moves.append(move)
-                        seen_moves.add(move)
-
-            # All remaining hidden neighbors must be safe.
-            if remaining_mines == 0:
-                for (nr, nc) in hidden_coords:
-                    move = (nr, nc, "REVEAL")
-                    if move not in seen_moves:
-                        certain_moves.append(move)
-                        seen_moves.add(move)
-
-            # Record summary for possible subset checks later.
-            frontier_data.append(
-                {
-                    "coord": (r, c),
-                    "hidden_coords": hidden_coords,
-                    "mines_needed": remaining_mines,
-                }
-            )
-
-        # If we got any trivial moves, return them immediately
-        if certain_moves:
-            return certain_moves
-
-        # Otherwise, attempt a single round of subset reasoning
-        self._apply_subset_logic(frontier_data, certain_moves, seen_moves)
-
-        # Either we found subset moves, or still nothing -> [].
-        return certain_moves
+                            certain_moves.append(move)
