@@ -33,7 +33,7 @@ class Board:
         "intermediate": (16, 16, 40),
         "expert": (30, 16, 99),
     }
-    DEFAULT_DENSITY = 0.15  # 15% mine density for calculated custom boards
+    DEFAULT_DENSITY = 0.15  # guesstimate - 15% mine density for calculated custom boards
 
     def _get_config(self, rows: Optional[int], cols: Optional[int], 
                     mines: Optional[int], difficulty: str) -> Tuple[int, int, int]:
