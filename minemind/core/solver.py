@@ -50,9 +50,7 @@ class MinemindSolver:
     All moves are deduplicated via a seen_moves set.
     """
 
-    # ------------------------------------------------------------------ #
-    # Frontier helpers
-    # ------------------------------------------------------------------ #
+    # ----- Frontier helpers -----
 
     def _get_frontier_cells(self, board: Board) -> List[Tuple[int, int]]:
         """
