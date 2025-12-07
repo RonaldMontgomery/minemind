@@ -307,28 +307,43 @@ class TestBoardFloodFillBehavior(unittest.TestCase):
     """
 
     def test_flood_fill_stops_at_numbered_cells(self):
-        b = Board(rows=3, cols=3, mines=0, difficulty="whatever")
+        """
+        Construct a board with a region of zero cells separated from other cells
+        by a column of numbered cells (neighbor_mines > 0). Revealing inside
+        the zero region should reveal the zeros and the boundary numbers, but
+        should not 'leak' beyond the numbered boundary.
+        """
+        b = Board(rows=3, cols=4, mines=0, difficulty="whatever")
 
-        for r in range(3):
-            for c in range(3):
+        # Manually set up a clean boundary structure:
+        for r in range(b.rows):
+            for c in range(b.cols):
                 b.cells[r][c] = Cell()
+                b.cells[r][c].neighbor_mines = 0 # Default all to 0
+            
+            # Column 2 (index 2) is the boundary (count = 1)
+            b.cells[r][2].neighbor_mines = 1 
 
-        b.cells[0][2].is_mine = True
-        b.mines = 1
-        b._calculate_neighbor_counts()
-        b.state = "PLAYING"
+        # CRITICAL: Bypass the deferred setup that would wipe out your manual counts.
+        b.mines_placed = True 
+        
+        # Reveal from inside the zero region.
+        b.reveal(1, 0)
 
-        b.reveal(2, 0)
+        # Zeros and numbered boundary (Col 0, 1, 2) should be revealed.
+        for r in range(b.rows):
+            for c in range(3):  # columns 0, 1, 2
+                self.assertTrue(
+                    b.cells[r][c].is_revealed,
+                    f"Expected flood-fill to reveal zero region and boundary at ({r},{c}).",
+                )
 
-        self.assertFalse(b.cells[0][2].is_revealed)
-
-        for r in range(3):
-            for c in range(3):
-                if not b.cells[r][c].is_mine:
-                    self.assertTrue(b.cells[r][c].is_revealed)
-
-        self.assertTrue(b.cells[0][1].is_revealed or b.cells[1][2].is_revealed)
-
+        # Rightmost column (3) should remain hidden (no propagation beyond numbers).
+        for r in range(b.rows):
+            self.assertFalse(
+                b.cells[r][3].is_revealed,
+                f"Flood-fill should not reveal beyond numbered boundary at row {r}.",
+            )
 
 class TestBoardWinConditionLogic(unittest.TestCase):
     """
